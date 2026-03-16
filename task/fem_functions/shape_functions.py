@@ -281,8 +281,7 @@ class ShapeFunctionsMath:
                 summ_x_tau = []
                 summ_y_tau = []
                 summ_z_tau = []
-                for point in xyz:
-                    index_of_nt = xyz.index(point)
+                for index_of_nt, point in enumerate(xyz):
                     summ_x_eta.append(point[0] * depsite[index_for_depsite][index_of_nt][0])
                     summ_y_eta.append(point[1] * depsite[index_for_depsite][index_of_nt][0])
                     summ_z_eta.append(point[2] * depsite[index_for_depsite][index_of_nt][0])

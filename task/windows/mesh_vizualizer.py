@@ -104,15 +104,16 @@ class MeshVisualizer:
         # 2. Деформовані вузли (Зелені точки) з напруженнями
         hover_text_def = []
         for i in range(num_nodes):
+            x, y, z = x_points_modified[i], y_points_modified[i], z_points_modified[i]
             if stresses and i < len(stresses):
                 s = stresses[i]
-                # s = [sx, sy, sz, txy, tyz, tzx]
                 txt = (f"Вузол {i}<br>"
-                       f"Sz: {s[2]:.4f}<br>" 
+                       f"X: {x:.4f}, Y: {y:.4f}, Z: {z:.4f}<br>"
                        f"Sx: {s[0]:.4f}<br>"
-                       f"Sy: {s[1]:.4f}")
+                       f"Sy: {s[1]:.4f}<br>"
+                       f"Sz: {s[2]:.4f}")
             else:
-                txt = f"Вузол {i}"
+                txt = f"Вузол {i}<br>X: {x:.4f}, Y: {y:.4f}, Z: {z:.4f}"
             hover_text_def.append(txt)
 
         fig.add_trace(go.Scatter3d(
