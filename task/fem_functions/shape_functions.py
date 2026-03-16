@@ -422,73 +422,77 @@ class ShapeFunctionsMath:
 
     def calculate_stresses(self, displacements, E, nu, results):
         """
-        Обчислює усереднені тензори напружень у вузлах.
-        Використовує ВЖЕ ПОРАХОВАНІ реальні похідні DFIXYZ з результатів симуляції.
+        Обчислює напруження у вузлах через B-матрицю в локальних
+        координатах кожного вузла, з усередненням по спільних вузлах.
         """
-        G = E / (2 * (1 + nu))  # Модуль зсуву
-        lam = (E * nu) / ((1 + nu) * (1 - 2 * nu)) # Параметр Ляме
+        G = E / (2 * (1 + nu))
+        lam = (E * nu) / ((1 + nu) * (1 - 2 * nu))
 
         D = np.array([
-            [lam + 2*G, lam,       lam,       0, 0, 0],
-            [lam,       lam + 2*G, lam,       0, 0, 0],
-            [lam,       lam,       lam + 2*G, 0, 0, 0],
-            [0,         0,         0,         G, 0, 0],
-            [0,         0,         0,         0, G, 0],
-            [0,         0,         0,         0, 0, G]
+            [lam+2*G, lam,     lam,     0, 0, 0],
+            [lam,     lam+2*G, lam,     0, 0, 0],
+            [lam,     lam,     lam+2*G, 0, 0, 0],
+            [0,       0,       0,       G, 0, 0],
+            [0,       0,       0,       0, G, 0],
+            [0,       0,       0,       0, 0, G],
         ])
 
         num_nodes = len(results.AKT)
         node_stresses = np.zeros((num_nodes, 6))
-        node_counts = np.zeros(num_nodes)
+        node_counts   = np.zeros(num_nodes)
 
-        for el_idx, element_nodes_indices in enumerate(results.NT):
-            
-            U_e = []
-            for node_idx in element_nodes_indices:
-                base_idx = 3 * node_idx
-                U_e.extend([
-                    displacements[base_idx],    
-                    displacements[base_idx + 1],
-                    displacements[base_idx + 2] 
-                ])
-            U_e = np.array(U_e)
+        for el_idx, el_nodes in enumerate(results.NT):
+            # координати 20 вузлів цього елемента
+            el_coords = [results.AKT[n] for n in el_nodes]
 
-            # Отримуємо реальні похідні (DFIXYZ) ВЖЕ ПОРАХОВАНІ для цього елемента!
-            # Нам потрібні похідні у вузлах. Оскільки ми рахували їх у точках Гауса,
-            # для простоти (і швидкості) візьмемо похідні в найближчих точках або центральній.
-            # (Для точного розрахунку вузлових напружень треба екстраполювати з точок Гауса,
-            # але для початку використаємо центральну точку Гауса №13, де alpha=0, beta=0, gamma=0).
-            # Індекс центральної точки в нашому DFIXYZ[27] — це 13.
-            
-            central_gp_idx = 13 
-            dfixyz_element = results.DFIXYZ[el_idx][central_gp_idx]
+            # переміщення елемента [u0x,u0y,u0z, u1x,u1y,u1z, ...]
+            U_e = np.array([
+                displacements[3*n + c]
+                for n in el_nodes
+                for c in range(3)
+            ])
 
-            B = np.zeros((6, 60))
-            for j in range(20):
-                dN_dx, dN_dy, dN_dz = dfixyz_element[j]
-                
-                idx = 3 * j
-                B[0, idx]     = dN_dx
-                B[1, idx + 1] = dN_dy
-                B[2, idx + 2] = dN_dz
-                B[3, idx]     = dN_dy
-                B[3, idx + 1] = dN_dx
-                B[4, idx + 1] = dN_dz
-                B[4, idx + 2] = dN_dy
-                B[5, idx]     = dN_dz
-                B[5, idx + 2] = dN_dx
+            # для кожного вузла — рахуємо B у його власних локальних координатах
+            for local_j, global_j in enumerate(el_nodes):
+                alpha, beta, gamma = constants.LOCAL_NODE_COORDS_3D[local_j]
 
-            epsilon = np.dot(B, U_e)
-            sigma_element = np.dot(D, epsilon) 
+                # Якобіан і похідні форм-функцій у цій точці
+                J = np.zeros((3, 3))
+                dfiabg = []
+                for i, lp in enumerate(constants.LOCAL_NODE_COORDS_3D):
+                    if i > 7:
+                        d = self.DFIABD_center_side(alpha, beta, gamma, lp[0], lp[1], lp[2])
+                    else:
+                        d = self.DFIABD_angle(alpha, beta, gamma, lp[0], lp[1], lp[2])
+                    dfiabg.append(d)
+                    x, y, z = el_coords[i]
+                    J[0,0]+=x*d[0]; J[0,1]+=y*d[0]; J[0,2]+=z*d[0]
+                    J[1,0]+=x*d[1]; J[1,1]+=y*d[1]; J[1,2]+=z*d[1]
+                    J[2,0]+=x*d[2]; J[2,1]+=y*d[2]; J[2,2]+=z*d[2]
 
-            for global_node_idx in element_nodes_indices:
-                node_stresses[global_node_idx] += sigma_element
-                node_counts[global_node_idx] += 1
+                try:
+                    invJ = np.linalg.inv(J)
+                except np.linalg.LinAlgError:
+                    continue
 
-        node_counts[node_counts == 0] = 1 
-        averaged_stresses = node_stresses / node_counts[:, None]
+                B = np.zeros((6, 60))
+                for j in range(20):
+                    dg = np.dot(invJ, dfiabg[j])
+                    dx, dy, dz = dg
+                    idx = 3 * j
+                    B[0, idx]     = dx
+                    B[1, idx + 1] = dy
+                    B[2, idx + 2] = dz
+                    B[3, idx]     = dy;  B[3, idx + 1] = dx
+                    B[4, idx + 1] = dz;  B[4, idx + 2] = dy
+                    B[5, idx]     = dz;  B[5, idx + 2] = dx
 
-        return averaged_stresses.tolist()
+                sigma = np.dot(D, np.dot(B, U_e))
+                node_stresses[global_j] += sigma
+                node_counts[global_j]   += 1
+
+        node_counts[node_counts == 0] = 1
+        return (node_stresses / node_counts[:, None]).tolist()
     
     def save_dfiabg_to_txt(self, dfiabg_matrix, filename="statics/DFIABG.txt"):
         """
