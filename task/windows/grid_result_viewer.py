@@ -5,7 +5,7 @@ from task import constants
 
 class GridResultsViewer(wx.Frame):
     def __init__(self, parent, results):
-        super().__init__(parent, title="Лаб 4 - DJ[27] та DFIXYZ[27,20,3] для елемента", size=(1000, 600))
+        super().__init__(parent, title="Лаб 4 - DJ[27] та DFIXYZ[27,20,3] для елемента", size=(1000, 800))
 
         self.all_jacobians = results.DJ
         self.all_det_j = results.DJ_det

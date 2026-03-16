@@ -3,7 +3,7 @@ import wx.grid
 
 class MGEViewer(wx.Frame):
     def __init__(self, parent, list_of_mge):
-        super().__init__(parent, title="Локальна Матриця Жорсткості Елемента (MGE 60x60)", size=(1000, 600))
+        super().__init__(parent, title="Локальна Матриця Жорсткості Елемента (MGE 60x60)", size=(1000, 800))
         
         self.list_of_mge = list_of_mge
         self.max_elements = len(list_of_mge) - 1
@@ -62,8 +62,8 @@ class MGEViewer(wx.Frame):
                 if abs(val) < 1e-5:
                     display_val = "0.00"
                 else:
-                    display_val = f"{val:.4e}"
-                
+                    display_val = f"{val:.4f}"
+
                 self.grid.SetCellValue(r, c, display_val)
                 
                 if r == c:

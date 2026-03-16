@@ -312,60 +312,46 @@ class ShapeFunctionsMath:
                 result.append(a)
         return result
     
-    def FE_Calc(self, c_list, P_val, ZP_cast):
-        """
-        Обчислює локальний вектор сил (Fe) розміром 60 для одного елемента 
-        від дії поверхневого тиску P_val.
-        c_list: вагові коефіцієнти Гауса для 2D-інтегрування
-        P_val: значення тиску (наприклад, 1000 Па)
-        ZP_cast: координати вузлів грані, на яку діє тиск
-        """
+    def FE_Calc(self, c_list, P_val, ZP_cast, press_axis=2, press_side='max'):
         DxyzDnt = self.DxyzDnt(ZP_cast)
         DEPSIxyzDEnt = self.DEPSIxyzDEnt()
-        
         fe1, fe2, fe3 = [], [], []
-        
-        for i in range(8):  
-            fe1_value = 0.0
-            fe2_value = 0.0
-            fe3_value = 0.0
-            iterator_for_help = 0
-            
+
+        for i in range(8):
+            fe1_value = fe2_value = fe3_value = 0.0
+            iterator = 0
             for m in c_list:
                 for n in c_list:
-                    DxyzDnt_item = DxyzDnt[iterator_for_help]
-                    DEPSIxyzDEnt_item = DEPSIxyzDEnt[iterator_for_help][i]
-                    
-                    # Проекції нормалі до поверхні (векторний добуток)
-                    nx = (DxyzDnt_item[1][0] * DxyzDnt_item[2][1] - DxyzDnt_item[2][0] * DxyzDnt_item[1][1])
-                    ny = (DxyzDnt_item[2][0] * DxyzDnt_item[0][1] - DxyzDnt_item[0][0] * DxyzDnt_item[2][1])
-                    nz = (DxyzDnt_item[0][0] * DxyzDnt_item[1][1] - DxyzDnt_item[1][0] * DxyzDnt_item[0][1])
-                    
-                    fe1_value += m * n * P_val * nx * DEPSIxyzDEnt_item
-                    fe2_value += m * n * P_val * ny * DEPSIxyzDEnt_item
-                    fe3_value += m * n * P_val * nz * DEPSIxyzDEnt_item
-                    
-                    iterator_for_help += 1
-                    
+                    D = DxyzDnt[iterator]
+                    PSI = DEPSIxyzDEnt[iterator][i]
+                    nx = (D[1][0]*D[2][1] - D[2][0]*D[1][1])
+                    ny = (D[2][0]*D[0][1] - D[0][0]*D[2][1])
+                    nz = (D[0][0]*D[1][1] - D[1][0]*D[0][1])
+                    fe1_value += m * n * P_val * nx * PSI
+                    fe2_value += m * n * P_val * ny * PSI
+                    fe3_value += m * n * P_val * nz * PSI
+                    iterator += 1
             fe1.append(fe1_value)
             fe2.append(fe2_value)
             fe3.append(fe3_value)
 
-        # Створюємо масив Fe розміром 60 і заповнюємо його нулями
-        # Fe = [
-        #     0, 0, 0, 0, fe1[0], fe1[1], fe1[2], fe1[3], 0, 0,
-        #     0, 0, 0, 0, 0, 0, fe1[4], fe1[5], fe1[6], fe1[7],
-        #     0, 0, 0, 0, fe2[0], fe2[1], fe2[2], fe2[3], 0, 0,
-        #     0, 0, 0, 0, 0, 0, fe2[4], fe2[5], fe2[6], fe2[7],
-        #     0, 0, 0, 0, fe3[0], fe3[1], fe3[2], fe3[3], 0, 0,
-        #     0, 0, 0, 0, 0, 0, fe3[4], fe3[5], fe3[6], fe3[7]
-        # ]
+        # Визначаємо позиції вузлів грані в залежності від осі та сторони
+        val = 1 if press_side == 'max' else -1
+        face_indices = [i for i, p in enumerate(constants.LOCAL_NODE_COORDS_3D) if p[press_axis] == val]
+        corner = [i for i in face_indices if 0 not in [abs(constants.LOCAL_NODE_COORDS_3D[i][j])
+                                                         for j in range(3) if j != press_axis]]
+        mid    = [i for i in face_indices if 0     in [abs(constants.LOCAL_NODE_COORDS_3D[i][j])
+                                                         for j in range(3) if j != press_axis]]
 
-        Fe = [
-            0, 0, 0, 0, fe1[0], fe1[1], fe1[2], fe1[3], 0, 0, 0, 0, 0, 0, 0, 0, fe1[4], fe1[5], fe1[6], fe1[7],
-            0, 0, 0, 0, fe2[0], fe2[1], fe2[2], fe2[3], 0, 0, 0, 0, 0, 0, 0, 0, fe2[4], fe2[5], fe2[6], fe2[7],
-            0, 0, 0, 0, fe3[0], fe3[1], fe3[2], fe3[3], 0, 0, 0, 0, 0, 0, 0, 0, fe3[4], fe3[5], fe3[6], fe3[7]
-        ]
+        Fe = [0.0] * 60
+        for k, pos in enumerate(corner):
+            Fe[pos]      = fe1[k]
+            Fe[pos + 20] = fe2[k]
+            Fe[pos + 40] = fe3[k]
+        for k, pos in enumerate(mid):
+            Fe[pos]      = fe1[k + 4]
+            Fe[pos + 20] = fe2[k + 4]
+            Fe[pos + 40] = fe3[k + 4]
 
         return Fe
 
@@ -420,7 +406,7 @@ class ShapeFunctionsMath:
         Збирає Глобальний Вектор Сил (F).
         """
         big_vector = np.zeros(3 * AKT_RANGE)
-        
+
         for index_of_FE, fe in enumerate(All_Fe):
             for i in range(60):
                 if i < 20:
@@ -432,7 +418,7 @@ class ShapeFunctionsMath:
 
                 index_i_for_FE = 3 * All_NT[index_of_FE][i_for_NT] + xyz_cord_i
                 big_vector[index_i_for_FE] += fe[i]
-                
+
         return big_vector
 
     def calculate_stresses(self, displacements, E, nu, results):
