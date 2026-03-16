@@ -27,3 +27,6 @@ class SimulationParams:
     
     # Список індексів елементів, які закріплюються (вісь, сторона)
     stick_element: tuple = (2, 'min')
+    
+    # Сторона, де застосовується тиск (вісь, сторона)
+    pressure_side: tuple = (2, 'max')

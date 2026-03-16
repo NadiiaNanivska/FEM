@@ -221,6 +221,290 @@ class ShapeFunctionsMath:
         big_matrix = big_matrix.tolist()
         return big_matrix
     
+    def PSINT_angel(self, eta, tau, eta_i, tau_i):
+        result = [
+            (1 / 4) * (tau * tau_i + 1) * (eta_i * (eta_i * eta + tau_i * tau - 1) + eta_i * (eta_i * eta + 1)),
+            (1 / 4) * (eta_i * eta + 1) * (tau_i * (eta_i * eta + tau_i * tau - 1) + tau_i * (tau_i * tau + 1))
+        ]
+        return result
+
+    def PSINT_57(self, eta, tau, eta_i, tau_i):
+        result = [
+            (-tau * tau_i - 1) * eta,
+            (1 / 2) * (1 - eta * eta) * tau_i
+        ]
+        return result
+
+    def PSINT_68(self, eta, tau, eta_i, tau_i):
+        result = [
+            (1 / 2) * (1 - tau * tau) * eta_i,
+            (-eta * eta_i - 1) * tau
+        ]
+        return result
+
+    def PSINT_angel_main(self, eta, tau, eta_i, tau_i):
+        result = (1 / 4) * (tau * tau_i + 1) * (eta * eta_i + 1) * (eta * eta_i + tau_i * tau - 1)
+        return result
+
+    def PSINT_57_main(self, eta, tau, eta_i, tau_i):
+        result = (1 / 2) * (-eta * eta + 1) * (tau_i * tau + 1)
+        return result
+
+    def PSINT_68_main(self, eta, tau, eta_i, tau_i):
+        result = (1 / 2) * (-tau * tau + 1) * (eta_i * eta + 1)
+        return result
+
+    def DEPSITE(self):
+        result = []
+        for eta in constants.GAUSS_POINTS:
+            for tau in constants.GAUSS_POINTS:
+                a = []
+                for point in constants.LOCAL_POINTS_2D:
+                    if constants.LOCAL_POINTS_2D.index(point) < 4:
+                        a.append(self.PSINT_angel(eta, tau, point[0], point[1]))
+                    elif constants.LOCAL_POINTS_2D.index(point) == 4 or constants.LOCAL_POINTS_2D.index(point) == 6:
+                        a.append(self.PSINT_57(eta, tau, point[0], point[1]))
+                    elif constants.LOCAL_POINTS_2D.index(point) == 5 or constants.LOCAL_POINTS_2D.index(point) == 7:
+                        a.append(self.PSINT_68(eta, tau, point[0], point[1]))
+                result.append(a)
+        return result
+
+    def DxyzDnt(self, xyz):
+        result = []
+        depsite = self.DEPSITE()
+        index_for_depsite = 0
+        for eta in constants.GAUSS_POINTS:
+            for tau in constants.GAUSS_POINTS:
+                summ_x_eta = []
+                summ_y_eta = []
+                summ_z_eta = []
+                summ_x_tau = []
+                summ_y_tau = []
+                summ_z_tau = []
+                for point in xyz:
+                    index_of_nt = xyz.index(point)
+                    summ_x_eta.append(point[0] * depsite[index_for_depsite][index_of_nt][0])
+                    summ_y_eta.append(point[1] * depsite[index_for_depsite][index_of_nt][0])
+                    summ_z_eta.append(point[2] * depsite[index_for_depsite][index_of_nt][0])
+                    summ_x_tau.append(point[0] * depsite[index_for_depsite][index_of_nt][1])
+                    summ_y_tau.append(point[1] * depsite[index_for_depsite][index_of_nt][1])
+                    summ_z_tau.append(point[2] * depsite[index_for_depsite][index_of_nt][1])
+                result.append([
+                    [sum(summ_x_eta), sum(summ_x_tau)],
+                    [sum(summ_y_eta), sum(summ_y_tau)],
+                    [sum(summ_z_eta), sum(summ_z_tau)]
+                ])
+                index_for_depsite += 1
+        return result
+
+    def DEPSIxyzDEnt(self):
+        result = []
+        for eta in constants.GAUSS_POINTS:
+            for tau in constants.GAUSS_POINTS:
+                a = []
+                for point in constants.LOCAL_POINTS_2D:
+                    if constants.LOCAL_POINTS_2D.index(point) < 4:
+                        a.append(self.PSINT_angel_main(eta, tau, point[0], point[1]))
+                    elif constants.LOCAL_POINTS_2D.index(point) == 4 or constants.LOCAL_POINTS_2D.index(point) == 6:
+                        a.append(self.PSINT_57_main(eta, tau, point[0], point[1]))
+                    elif constants.LOCAL_POINTS_2D.index(point) == 5 or constants.LOCAL_POINTS_2D.index(point) == 7:
+                        a.append(self.PSINT_68_main(eta, tau, point[0], point[1]))
+                result.append(a)
+        return result
+    
+    def FE_Calc(self, c_list, P_val, ZP_cast):
+        """
+        Обчислює локальний вектор сил (Fe) розміром 60 для одного елемента 
+        від дії поверхневого тиску P_val.
+        c_list: вагові коефіцієнти Гауса для 2D-інтегрування
+        P_val: значення тиску (наприклад, 1000 Па)
+        ZP_cast: координати вузлів грані, на яку діє тиск
+        """
+        DxyzDnt = self.DxyzDnt(ZP_cast)
+        DEPSIxyzDEnt = self.DEPSIxyzDEnt()
+        
+        fe1, fe2, fe3 = [], [], []
+        
+        for i in range(8):  
+            fe1_value = 0.0
+            fe2_value = 0.0
+            fe3_value = 0.0
+            iterator_for_help = 0
+            
+            for m in c_list:
+                for n in c_list:
+                    DxyzDnt_item = DxyzDnt[iterator_for_help]
+                    DEPSIxyzDEnt_item = DEPSIxyzDEnt[iterator_for_help][i]
+                    
+                    # Проекції нормалі до поверхні (векторний добуток)
+                    nx = (DxyzDnt_item[1][0] * DxyzDnt_item[2][1] - DxyzDnt_item[2][0] * DxyzDnt_item[1][1])
+                    ny = (DxyzDnt_item[2][0] * DxyzDnt_item[0][1] - DxyzDnt_item[0][0] * DxyzDnt_item[2][1])
+                    nz = (DxyzDnt_item[0][0] * DxyzDnt_item[1][1] - DxyzDnt_item[1][0] * DxyzDnt_item[0][1])
+                    
+                    fe1_value += m * n * P_val * nx * DEPSIxyzDEnt_item
+                    fe2_value += m * n * P_val * ny * DEPSIxyzDEnt_item
+                    fe3_value += m * n * P_val * nz * DEPSIxyzDEnt_item
+                    
+                    iterator_for_help += 1
+                    
+            fe1.append(fe1_value)
+            fe2.append(fe2_value)
+            fe3.append(fe3_value)
+
+        # Створюємо масив Fe розміром 60 і заповнюємо його нулями
+        # Fe = [
+        #     0, 0, 0, 0, fe1[0], fe1[1], fe1[2], fe1[3], 0, 0,
+        #     0, 0, 0, 0, 0, 0, fe1[4], fe1[5], fe1[6], fe1[7],
+        #     0, 0, 0, 0, fe2[0], fe2[1], fe2[2], fe2[3], 0, 0,
+        #     0, 0, 0, 0, 0, 0, fe2[4], fe2[5], fe2[6], fe2[7],
+        #     0, 0, 0, 0, fe3[0], fe3[1], fe3[2], fe3[3], 0, 0,
+        #     0, 0, 0, 0, 0, 0, fe3[4], fe3[5], fe3[6], fe3[7]
+        # ]
+
+        Fe = [
+            0, 0, 0, 0, fe1[0], fe1[1], fe1[2], fe1[3], 0, 0, 0, 0, 0, 0, 0, 0, fe1[4], fe1[5], fe1[6], fe1[7],
+            0, 0, 0, 0, fe2[0], fe2[1], fe2[2], fe2[3], 0, 0, 0, 0, 0, 0, 0, 0, fe2[4], fe2[5], fe2[6], fe2[7],
+            0, 0, 0, 0, fe3[0], fe3[1], fe3[2], fe3[3], 0, 0, 0, 0, 0, 0, 0, 0, fe3[4], fe3[5], fe3[6], fe3[7]
+        ]
+
+        return Fe
+
+    def MG_Create(self, All_MGE, AKT_RANGE, All_NT, ZU_cast, AKT_cast):
+        """
+        Збирає Глобальну Матрицю Жорсткості (MGG) та застосовує граничні умови.
+        AKT_RANGE - це загальна кількість вузлів (len(AKT)).
+        """
+        big_matrix = np.zeros((3 * AKT_RANGE, 3 * AKT_RANGE))
+
+        for index_of_MGE, mge in enumerate(All_MGE):
+            for j in range(60):
+                for i in range(60):
+                    
+                    # Визначаємо осі (0=X, 1=Y, 2=Z) та локальний номер вузла
+                    if i < 20:
+                        xyz_cord_i, i_for_NT = 0, i
+                    elif 19 < i < 40:
+                        xyz_cord_i, i_for_NT = 1, i - 20
+                    else:
+                        xyz_cord_i, i_for_NT = 2, i - 40
+
+                    if j < 20:
+                        xyz_cord_j, j_for_NT = 0, j
+                    elif 19 < j < 40:
+                        xyz_cord_j, j_for_NT = 1, j - 20
+                    else:
+                        xyz_cord_j, j_for_NT = 2, j - 40
+
+                    index_i_for_MG = 3 * All_NT[index_of_MGE][i_for_NT] + xyz_cord_i
+                    index_j_for_MG = 3 * All_NT[index_of_MGE][j_for_NT] + xyz_cord_j
+                    
+                    big_matrix[index_j_for_MG][index_i_for_MG] += mge[j][i]
+
+        for point_coords in ZU_cast:
+            if point_coords in AKT_cast:
+                index_of_point = AKT_cast.index(point_coords)
+                ix = 3 * index_of_point + 0
+                iy = 3 * index_of_point + 1
+                iz = 3 * index_of_point + 2
+                
+                penalty_value = 1e16 
+                big_matrix[ix][ix] = penalty_value
+                big_matrix[iy][iy] = penalty_value
+                big_matrix[iz][iz] = penalty_value
+
+        return big_matrix
+
+
+    def F_Create(self, All_Fe, AKT_RANGE, All_NT):
+        """
+        Збирає Глобальний Вектор Сил (F).
+        """
+        big_vector = np.zeros(3 * AKT_RANGE)
+        
+        for index_of_FE, fe in enumerate(All_Fe):
+            for i in range(60):
+                if i < 20:
+                    xyz_cord_i, i_for_NT = 0, i
+                elif 19 < i < 40:
+                    xyz_cord_i, i_for_NT = 1, i - 20
+                else:
+                    xyz_cord_i, i_for_NT = 2, i - 40
+
+                index_i_for_FE = 3 * All_NT[index_of_FE][i_for_NT] + xyz_cord_i
+                big_vector[index_i_for_FE] += fe[i]
+                
+        return big_vector
+
+    def calculate_stresses(self, displacements, E, nu, results):
+        """
+        Обчислює усереднені тензори напружень у вузлах.
+        Використовує ВЖЕ ПОРАХОВАНІ реальні похідні DFIXYZ з результатів симуляції.
+        """
+        G = E / (2 * (1 + nu))  # Модуль зсуву
+        lam = (E * nu) / ((1 + nu) * (1 - 2 * nu)) # Параметр Ляме
+
+        D = np.array([
+            [lam + 2*G, lam,       lam,       0, 0, 0],
+            [lam,       lam + 2*G, lam,       0, 0, 0],
+            [lam,       lam,       lam + 2*G, 0, 0, 0],
+            [0,         0,         0,         G, 0, 0],
+            [0,         0,         0,         0, G, 0],
+            [0,         0,         0,         0, 0, G]
+        ])
+
+        num_nodes = len(results.AKT)
+        node_stresses = np.zeros((num_nodes, 6))
+        node_counts = np.zeros(num_nodes)
+
+        for el_idx, element_nodes_indices in enumerate(results.NT):
+            
+            U_e = []
+            for node_idx in element_nodes_indices:
+                base_idx = 3 * node_idx
+                U_e.extend([
+                    displacements[base_idx],    
+                    displacements[base_idx + 1],
+                    displacements[base_idx + 2] 
+                ])
+            U_e = np.array(U_e)
+
+            # Отримуємо реальні похідні (DFIXYZ) ВЖЕ ПОРАХОВАНІ для цього елемента!
+            # Нам потрібні похідні у вузлах. Оскільки ми рахували їх у точках Гауса,
+            # для простоти (і швидкості) візьмемо похідні в найближчих точках або центральній.
+            # (Для точного розрахунку вузлових напружень треба екстраполювати з точок Гауса,
+            # але для початку використаємо центральну точку Гауса №13, де alpha=0, beta=0, gamma=0).
+            # Індекс центральної точки в нашому DFIXYZ[27] — це 13.
+            
+            central_gp_idx = 13 
+            dfixyz_element = results.DFIXYZ[el_idx][central_gp_idx]
+
+            B = np.zeros((6, 60))
+            for j in range(20):
+                dN_dx, dN_dy, dN_dz = dfixyz_element[j]
+                
+                idx = 3 * j
+                B[0, idx]     = dN_dx
+                B[1, idx + 1] = dN_dy
+                B[2, idx + 2] = dN_dz
+                B[3, idx]     = dN_dy
+                B[3, idx + 1] = dN_dx
+                B[4, idx + 1] = dN_dz
+                B[4, idx + 2] = dN_dy
+                B[5, idx]     = dN_dz
+                B[5, idx + 2] = dN_dx
+
+            epsilon = np.dot(B, U_e)
+            sigma_element = np.dot(D, epsilon) 
+
+            for global_node_idx in element_nodes_indices:
+                node_stresses[global_node_idx] += sigma_element
+                node_counts[global_node_idx] += 1
+
+        node_counts[node_counts == 0] = 1 
+        averaged_stresses = node_stresses / node_counts[:, None]
+
+        return averaged_stresses.tolist()
+    
     def save_dfiabg_to_txt(self, dfiabg_matrix, filename="statics/DFIABG.txt"):
         """
         Зберігає матрицю похідних DFIABG у зручному текстовому форматі.

@@ -12,7 +12,11 @@ class SimulationResults:
     MGE: List[Any] = None         # Локальні матриці жорсткості елементів
 
     AKT: List[Any] = None         # Глобальні координати вузлів (AKT)
-    NT: List[Any] = None          # Матриця зв'язності (NT)
+    NT: List[Any] = None  
+    
+    FE: List[Any] = None          # Локальні вектори сил (FE)  
+    displacements: Any = None     # Глобальний вектор переміщень (U)
+    stresses: List[Any] = None    # Напруження у вузлах
 
     def is_calculated(self) -> bool:
         """Перевіряє, чи розрахунок вже було виконано."""
