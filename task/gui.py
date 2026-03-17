@@ -16,7 +16,8 @@ from task.windows.mesh_vizualizer import MeshVisualizer
 from task.fem_functions.boundary_condition_manager import BoundaryConditionManager
 from task.dto.simulation_results import SimulationResults
 import ctypes
-
+import threading
+from wx.lib.newevent import NewEvent
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -25,6 +26,136 @@ except Exception:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         pass
+
+
+CalculationStepEvent, EVT_CALCULATION_STEP = NewEvent()
+CalculationDoneEvent, EVT_CALCULATION_DONE = NewEvent()
+CalculationErrorEvent, EVT_CALCULATION_ERROR = NewEvent()
+
+class CalculationThread(threading.Thread):
+    def __init__(self, parent_window, params, results_obj):
+        super().__init__()
+        self.parent_window = parent_window
+        self.params = params
+        self.results = results_obj
+        self.logger = logging.getLogger(__name__ + ".CalcThread")
+
+    def run(self):
+        """Метод, який виконується у фоновому потоці"""
+        try:
+            mesh_gen = MeshGenerator()
+            math_engine = ShapeFunctionsMath()
+            bc_manager = BoundaryConditionManager()
+
+            # 1. ГЕНЕРАЦІЯ СІТКИ
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Генерація сітки...", progress=5))
+            elements = mesh_gen.create_points(self.params.a, self.params.b, self.params.c, self.params.na, self.params.nb, self.params.nc)
+            AKT = mesh_gen.separate_point(self.params.a, self.params.b, self.params.c, self.params.na, self.params.nb, self.params.nc)
+            NT = mesh_gen.NT_transform(AKT, elements)
+            AKT_RANGE = len(AKT)
+            self.results.AKT = AKT
+            self.results.NT = NT
+
+            ZU = bc_manager.ZU_Chose(AKT, axis=self.params.stick_element[0], side=self.params.stick_element[1])
+            self.logger.info(f"Закріплені вузли (ZU): {ZU}")
+
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Сітка згенерована.", progress=10, enable_btn='mesh'))
+
+            # 2. ОБЧИСЛЕННЯ ЯКОБІАНІВ
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Обчислення Якобіанів та похідних...", progress=15))
+            DFIABG = math_engine.DFIABG_Create()
+            DJ, DJ_det, DFIXYZ = [], [], []
+
+            total_els = len(NT)
+            for i, element_coords in enumerate(elements):
+                jacobians = math_engine.create_jacobian_for_element(element_coords, DFIABG)
+                DJ.append(jacobians)
+
+                det_j_for_element = [math_engine.calculate_determinant(J) for J in jacobians]
+                DJ_det.append(det_j_for_element)
+
+                dfixyz_element = math_engine.calculate_dfixyz_for_element(jacobians, DFIABG)
+                DFIXYZ.append(dfixyz_element)
+
+                if i % max(1, total_els // 10) == 0:
+                    prog = 15 + int(20 * (i / total_els))
+                    wx.PostEvent(self.parent_window, CalculationStepEvent(msg=f"Якобіани: елемент {i}/{total_els}", progress=prog))
+
+            self.results.DJ = DJ
+            self.results.DJ_det = DJ_det
+            self.results.DFIXYZ = DFIXYZ
+
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Якобіани обчислені.", progress=35, enable_btn='dj'))
+
+            # 3. ОБЧИСЛЕННЯ MGE
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Обчислення локальних матриць жорсткості (MGE)...", progress=40))
+            list_of_MGE = []
+            for i in range(len(elements)):
+                list_of_MGE.append(
+                    math_engine.calc_MGE(DFIXYZ[i], DJ_det[i], [constants.c_1, constants.c_2, constants.c_3],
+                                         self.params.liambda, self.params.nu, self.params.mu))
+                if i % max(1, total_els // 10) == 0:
+                                    prog = 40 + int(30 * (i / total_els))
+                                    wx.PostEvent(self.parent_window, CalculationStepEvent(msg=f"MGE: елемент {i}/{total_els}", progress=prog))
+
+            self.results.MGE = list_of_MGE
+
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="MGE обчислені.", progress=70, enable_btn='mge'))
+
+            # 4. ВЕКТОРИ СИЛ (FE)
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Формування векторів сил (FE)...", progress=75))
+            FE = []
+            gauss_weights_2d = [constants.c_1, constants.c_2, constants.c_3]
+            press_axis, press_side = self.params.pressure_side
+
+            for i in range(len(NT)):
+                element_nodes = [AKT[node_idx] for node_idx in NT[i]]
+
+                if press_side == 'min':
+                    global_target = min([node[press_axis] for node in AKT])
+                    el_target = min([node[press_axis] for node in element_nodes])
+                else:
+                    global_target = max([node[press_axis] for node in AKT])
+                    el_target = max([node[press_axis] for node in element_nodes])
+
+                if round(el_target, 6) == round(global_target, 6):
+                    ZP_cast = bc_manager.ZP_Chose(element_nodes, press_axis, press_side)
+                    if len(ZP_cast) == 8:
+                        fe_vector = math_engine.FE_Calc(
+                            gauss_weights_2d, self.params.P, ZP_cast,
+                            press_axis=press_axis,
+                            press_side=press_side
+                        )
+                        FE.append(fe_vector)
+                    else:
+                        FE.append(np.zeros(60).tolist())
+                else:
+                    FE.append(np.zeros(60).tolist())
+
+            self.results.FE = FE
+
+            # 5. АНСАМБЛЮВАННЯ ТА РОЗВ'ЯЗАННЯ
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Ансамблювання MGG та розв'язання рівнянь...", progress=80))
+
+            MGG = math_engine.MG_Create(list_of_MGE, len(AKT), NT, ZU, AKT)
+            F = math_engine.F_Create(FE, len(AKT), NT)
+
+            displacements = np.linalg.solve(MGG, F)
+            self.results.displacements = displacements
+
+            # 6. НАПРУЖЕННЯ
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Обчислення напружень...", progress=95))
+            stresses = math_engine.calculate_stresses(displacements, self.params.E, self.params.nu, self.results)
+            self.results.stresses = stresses
+
+            # 7. ФІНІШ
+            wx.PostEvent(self.parent_window, CalculationStepEvent(msg="Завершення...", progress=100))
+            wx.PostEvent(self.parent_window, CalculationDoneEvent(results=self.results))
+
+        except Exception as e:
+            self.logger.error(f"Помилка в потоці: {str(e)}", exc_info=True)
+            wx.PostEvent(self.parent_window, CalculationErrorEvent(error_msg=str(e)))
+
 
 class MyPanel(wx.ScrolledWindow):
     def __init__(self, parent):
@@ -66,7 +197,7 @@ class MyPanel(wx.ScrolledWindow):
             ctrl.SetMinSize((150, 28))
 
         self.all_points_button = wx.Button(self, label="Розрахувати")
-        self.all_points_button.Bind(wx.EVT_BUTTON, self.on_all_points_button)
+        self.all_points_button.Bind(wx.EVT_BUTTON, self.on_calculate)
         self.all_points_button.SetBackgroundColour(wx.Colour(52, 152, 219))
         self.all_points_button.SetMinSize((320, 40))
         calc_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
@@ -184,6 +315,21 @@ class MyPanel(wx.ScrolledWindow):
 
         sizer.Add(button_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
+        self.status_label = wx.StaticText(self, label="Очікування розрахунку...")
+        self.status_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        self.progress_bar = wx.Gauge(self, range=100, size=(320, 15))
+        self.progress_bar.Hide()
+
+        button_sizer.Insert(0, self.status_label, 0, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL, 5)
+        button_sizer.Insert(1, self.progress_bar, 0, wx.ALL | wx.EXPAND, 5)
+
+        # Прив'язуємо кастомні події
+        self.Bind(EVT_CALCULATION_STEP, self.on_calculation_step)
+        self.Bind(EVT_CALCULATION_DONE, self.on_calculation_done)
+        self.Bind(EVT_CALCULATION_ERROR, self.on_calculation_error)
+
+        self.calc_thread = None
+
         self.SetSizer(sizer)
         
         sizer.Layout()
@@ -264,118 +410,71 @@ class MyPanel(wx.ScrolledWindow):
 
         return self.params
 
-    def on_all_points_button(self, event):
-        """
-        Головний контролер: оркеструє процес розрахунку та візуалізації.
-        """
+    def on_calculate(self, event):
+        """Запускає обчислення у фоновому потоці"""
         try:
-            params = self.get_params_from_ui()
+            self.params = self.get_params_from_ui()
         except ValueError as e:
             wx.MessageBox(str(e), "Помилка введення даних", wx.OK | wx.ICON_ERROR)
             return
 
-        self.logger.info("Генерація сітки...")
-        mesh_gen = MeshGenerator()
-        elements = mesh_gen.create_points(params.a, params.b, params.c, params.na, params.nb, params.nc)
-        AKT = mesh_gen.separate_point(params.a, params.b, params.c, params.na, params.nb, params.nc)
-        NT = mesh_gen.NT_transform(AKT, elements)
+        self.all_points_button.Disable()
 
-        bc_manager = BoundaryConditionManager()
-        ZU = bc_manager.ZU_Chose(AKT, axis=params.stick_element[0], side=params.stick_element[1])
-        self.logger.info(f"Закріплені вузли (ZU): {ZU}")
+        self.btn_view_dj.Disable()
+        self.btn_view_mge.Disable()
+        self.btn_view_mesh.Disable()
+        if hasattr(self, 'btn_view_results'):
+            self.btn_view_results.Disable()
 
-        self.logger.info("Обчислення Якобіанів та похідних...")
-        math_engine = ShapeFunctionsMath()
-        DFIABG = math_engine.DFIABG_Create()
-        print(f"[{datetime.datetime.now().strftime("%H:%M:%S")}] Обчислено DFIABG")
+        self.progress_bar.SetValue(0)
+        self.progress_bar.Show()
+        self.status_label.SetLabel("Підготовка до обчислень...")
+        self.Layout()
 
-#         script_dir = os.path.dirname(os.path.abspath(__file__))
-#         dfiabg_path = os.path.join(script_dir, "statics", "DFIABG_matrix.txt")
-#         math_engine.save_dfiabg_to_txt(DFIABG, dfiabg_path)
+        self.logger.info("Запуск фонового потоку розрахунків...")
 
-        DJ = []
-        DJ_det = []
-        DFIXYZ = []
-        FE = []
+        self.calc_thread = CalculationThread(self, self.params, self.results)
+        self.calc_thread.start()
 
-        for i, element_coords in enumerate(elements):
-            jacobians = math_engine.create_jacobian_for_element(element_coords, DFIABG)
-            DJ.append(jacobians)
-            
-            det_j_for_element = [math_engine.calculate_determinant(J) for J in jacobians]
-            DJ_det.append(det_j_for_element)
-            
-            dfixyz_element = math_engine.calculate_dfixyz_for_element(jacobians, DFIABG)
-            DFIXYZ.append(dfixyz_element)
+    def on_calculation_step(self, event):
+        """Обробляє проміжні повідомлення від потоку"""
+        if hasattr(event, 'msg'):
+            self.status_label.SetLabel(event.msg)
+            self.logger.info(event.msg)
 
-        self.logger.info("Обчислення локальних матриць жорсткості (MGE)...")
-        list_of_MGE = []
-        for i in range(len(elements)):
-            list_of_MGE.append(
-                math_engine.calc_MGE(DFIXYZ[i], DJ_det[i], [constants.c_1, constants.c_2, constants.c_3], 
-                                     params.liambda, params.nu, params.mu))
+        if hasattr(event, 'progress'):
+            self.progress_bar.SetValue(event.progress)
 
-        self.logger.info("Формування векторів сил (FE)...")
-        FE = []
-        ZP = []
-        # Вагові коефіцієнти для 2D-інтегрування Гауса
-        gauss_weights_2d = [constants.c_1, constants.c_2, constants.c_3]
-        press_axis, press_side = params.pressure_side
+        if hasattr(event, 'enable_btn'):
+            if event.enable_btn == 'mesh':
+                self.btn_view_mesh.Enable()
+            elif event.enable_btn == 'dj':
+                self.btn_view_dj.Enable()
+            elif event.enable_btn == 'mge':
+                self.btn_view_mge.Enable()
 
-        for i in range(len(NT)):
-            element_nodes = [AKT[node_idx] for node_idx in NT[i]]
+    def on_calculation_done(self, event):
+        """Обробляє успішне завершення розрахунків"""
+        self.results = event.results
 
-            if press_side == 'min':
-                global_target = min([node[press_axis] for node in AKT])
-                el_target = min([node[press_axis] for node in element_nodes])
-            else:
-                global_target = max([node[press_axis] for node in AKT])
-                el_target = max([node[press_axis] for node in element_nodes])
+        self.status_label.SetLabel("Розрахунок успішно завершено!")
+        self.progress_bar.Hide()
 
-            if round(el_target, 6) == round(global_target, 6):
-                ZP_cast = bc_manager.ZP_Chose(element_nodes, press_axis, press_side)
-                if len(ZP_cast) == 8:
-                    fe_vector = math_engine.FE_Calc(
-                        gauss_weights_2d, params.P, ZP_cast,
-                        press_axis=press_axis,
-                        press_side=press_side
-                    )
-                    FE.append(fe_vector)
-                else:
-                    FE.append(np.zeros(60).tolist())
-            else:
-                FE.append(np.zeros(60).tolist())
-
-        self.logger.info("Ансамблювання глобальної матриці MGG та вектора F...")
-
-        MGG = math_engine.MG_Create(list_of_MGE, len(AKT), NT, ZU, AKT)
-        F = math_engine.F_Create(FE, len(AKT), NT)
-
-        self.logger.info("Розв'язання системи рівнянь (пошук переміщень)...")
-        displacements = np.linalg.solve(MGG, F)
-        self.logger.info("Переміщення успішно знайдено!")
-
-        self.results.DJ = DJ
-        self.results.DJ_det = DJ_det
-        self.results.DFIXYZ = DFIXYZ
-        self.results.AKT = AKT
-        self.results.NT = NT
-        self.results.MGE = list_of_MGE
-        self.results.FE = FE
-        self.results.displacements = displacements
-
-        self.logger.info("Обчислення напружень...")
-        stresses = math_engine.calculate_stresses(displacements, params.E, params.nu, self.results)
-        self.logger.info("Напруження обчислено.")
-
-        self.results.stresses = stresses
-
-        self.btn_view_dj.Enable()
+        self.all_points_button.Enable()
         self.btn_view_mesh.Enable()
-        self.btn_view_mge.Enable() 
-        self.btn_view_results.Enable()
+        if hasattr(self, 'btn_view_results'):
+            self.btn_view_results.Enable()
 
-        wx.MessageBox("Розрахунок успішно завершено!", "Успіх", wx.OK | wx.ICON_INFORMATION)
+        self.Layout()
+        wx.MessageBox("Розрахунок успішно завершено!\nСистему рівнянь розв'язано.", "Успіх", wx.OK | wx.ICON_INFORMATION)
+
+    def on_calculation_error(self, event):
+        """Обробляє помилки, якщо потік впав"""
+        self.status_label.SetLabel("Помилка розрахунку!")
+        self.progress_bar.Hide()
+        self.all_points_button.Enable()
+        self.Layout()
+        wx.MessageBox(f"Сталася помилка під час розрахунку:\n{event.error_msg}", "Помилка", wx.OK | wx.ICON_ERROR)
 
     def on_view_dj(self, event):
         viewer = GridResultsViewer(self, self.results)
@@ -414,7 +513,7 @@ class MyPanel(wx.ScrolledWindow):
 
 class MainFrame(wx.Frame):
     def __init__(self):
-        wx.Frame.__init__(self, None, title="Симуляція МСЕ", size=wx.Size(750, 870))
+        wx.Frame.__init__(self, None, title="Симуляція МСЕ", size=wx.Size(750, 900))
         self.SetBackgroundColour(wx.Colour(245, 245, 250))
         
         self.Centre()
