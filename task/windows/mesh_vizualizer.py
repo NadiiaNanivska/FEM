@@ -1,211 +1,219 @@
+import numpy as np
 import plotly.graph_objects as go
+
 
 class MeshVisualizer:
     def __init__(self):
-        self.node_color = 'red'
-        self.node_size = 3
-        self.text_color = 'darkred'
+        pass
 
     def plot_initial_mesh(self, global_nodes, nt_list):
-        """Побудова лише початкової сітки (до розрахунку)"""
-        x_points = [node[0] for node in global_nodes]
-        y_points = [node[1] for node in global_nodes]
-        z_points = [node[2] for node in global_nodes]
-
-        num_nodes = len(x_points)
-        is_large_mesh = num_nodes > 800
-        
-        node_mode = 'markers' if is_large_mesh else 'markers+text'
-        node_numbers = [str(i) for i in range(num_nodes)] if not is_large_mesh else None
+        x = [n[0] for n in global_nodes]
+        y = [n[1] for n in global_nodes]
+        z = [n[2] for n in global_nodes]
+        n = len(x)
 
         fig = go.Figure()
 
-        # 1. ВУЗЛИ
+        lx, ly, lz = self._wireframe(x, y, z, nt_list)
         fig.add_trace(go.Scatter3d(
-            x=x_points, y=y_points, z=z_points,
-            mode=node_mode,
-            name='Вузли',
-            marker=dict(size=self.node_size if not is_large_mesh else 1, color=self.node_color),
-            text=node_numbers,
-            textposition="top center",
-            hoverinfo='x+y+z'
+            x=lx, y=ly, z=lz, mode='lines', name='Сітка',
+            line=dict(color='#2980b9', width=1), hoverinfo='skip',
         ))
-
-        # 2. КАРКАС
-        lx, ly, lz = self.build_wireframe_coords_optimized(x_points, y_points, z_points, nt_list)
         fig.add_trace(go.Scatter3d(
-            x=lx, y=ly, z=lz,
-            mode='lines',
-            name='Сітка',
-            line=dict(color='blue', width=1),
-            opacity=0.4
+            x=x, y=y, z=z, mode='markers+text', name='Вузли',
+            marker=dict(size=3, color='#e74c3c'),
+            text=[str(i) for i in range(n)],
+            textposition='top center', textfont=dict(size=8),
+            hovertemplate='Вузол %{text}<br>X=%{x:.3f} Y=%{y:.3f} Z=%{z:.3f}<extra></extra>',
         ))
-
-        axis_template = dict(
-            showbackground=False,
-            showgrid=True,   
-            gridcolor='rgba(200, 200, 200, 0.8)',
-            showline=True,  
-            zeroline=True,  
-        )
-
-        fig.update_layout(
-            title=f"МСЕ Початкова Сітка: {len(nt_list)} елементів, {num_nodes} вузлів",
-            scene=dict(
-                xaxis=dict(title='X', **axis_template),
-                yaxis=dict(title='Y', **axis_template),
-                zaxis=dict(title='Z', **axis_template),
-                aspectmode='data', 
-                camera=dict(eye=dict(x=2, y=-2, z=1.7))
-            ),
-            margin=dict(l=0, r=0, b=0, t=40)
-        )
-
+        fig.update_layout(**self._base_layout(
+            f'Початкова сітка — {len(nt_list)} елементів, {n} вузлів'
+        ))
         return fig
 
-    def plot_deformed_mesh(self, global_nodes, nt_list, displacements, stresses, scale_factor=1.0, P=0, E=0):
-        """Побудова деформованої сітки РАЗОМ із початковою для порівняння"""
-        x_points = [node[0] for node in global_nodes]
-        y_points = [node[1] for node in global_nodes]
-        z_points = [node[2] for node in global_nodes]
+    def plot_deformed_mesh(self, global_nodes, nt_list, displacements,
+                           stresses, scale_factor=1.0, P=0, E=0):
+        n = len(global_nodes)
+        x0 = np.array([nd[0] for nd in global_nodes])
+        y0 = np.array([nd[1] for nd in global_nodes])
+        z0 = np.array([nd[2] for nd in global_nodes])
 
-        num_nodes = len(x_points)
-        
-        # Деформовані координати
-        x_points_modified = []
-        y_points_modified = []
-        z_points_modified = []
-        
-        # Заповнюємо зміщені координати (координата + переміщення * масштаб)
-        for i in range(num_nodes):
-            u = displacements[i * 3 + 0]
-            v = displacements[i * 3 + 1]
-            w = displacements[i * 3 + 2]
-            
-            x_points_modified.append(x_points[i] + u * scale_factor)
-            y_points_modified.append(y_points[i] + v * scale_factor)
-            z_points_modified.append(z_points[i] + w * scale_factor)
+        U   = np.array(displacements)
+        ux  = U[0::3]; uy = U[1::3]; uz = U[2::3]
+
+        s   = np.array(stresses) if stresses else np.zeros((n, 6))
+        sx  = s[:, 0]; sy = s[:, 1]; sz = s[:, 2]
+        txy = s[:, 3]; tyz = s[:, 4]; tzx = s[:, 5]
+        vm  = np.sqrt(0.5 * ((sx-sy)**2 + (sy-sz)**2 + (sz-sx)**2
+                             + 6*(txy**2 + tyz**2 + tzx**2)))
+
+        xd = x0 + ux * scale_factor
+        yd = y0 + uy * scale_factor
+        zd = z0 + uz * scale_factor
+
+        # Wireframe
+        lx0, ly0, lz0 = self._wireframe(x0.tolist(), y0.tolist(), z0.tolist(), nt_list)
+        lxd, lyd, lzd = self._wireframe(xd.tolist(), yd.tolist(), zd.tolist(), nt_list)
+
+        # Hover тексти для деформованих вузлів
+        hover = []
+        for i in range(n):
+            hover.append(
+                f'<b>Вузол {i}</b><br>'
+                f'────────────────<br>'
+                f'<b>Нові координати:</b><br>'
+                f'X = {xd[i]:.5f}<br>'
+                f'Y = {yd[i]:.5f}<br>'
+                f'Z = {zd[i]:.5f}<br>'
+                f'────────────────<br>'
+                f'<b>Переміщення:</b><br>'
+                f'U = {ux[i]:.4e}<br>'
+                f'V = {uy[i]:.4e}<br>'
+                f'W = {uz[i]:.4e}<br>'
+                f'────────────────<br>'
+                f'<b>Напруження:</b><br>'
+                f'σX = {sx[i]:.4f}<br>'
+                f'σY = {sy[i]:.4f}<br>'
+                f'σZ = {sz[i]:.4f}<br>'
+                f'τXY = {txy[i]:.4f}<br>'
+                f'τYZ = {tyz[i]:.4f}<br>'
+                f'τZX = {tzx[i]:.4f}<br>'
+                f'────────────────<br>'
+                f'<b>Мізес: {vm[i]:.4f}</b>'
+            )
 
         fig = go.Figure()
 
-        # 1. Початкові вузли (Червоні точки)
-        node_numbers = [str(i) for i in range(num_nodes)]
+        # trace 0 — каркас до деформації
         fig.add_trace(go.Scatter3d(
-            x=x_points, y=y_points, z=z_points,
-            mode='markers+text' if num_nodes <= 800 else 'markers',    
-            name='Початкова форма',
-            marker=dict(size=3, color='red', opacity=0.3), # Робимо їх прозорішими
-            text=node_numbers,
-            textposition="top center",
-            textfont=dict(size=9, color='darkred'),
-            hoverinfo='x+y+z' 
+            x=lx0, y=ly0, z=lz0,
+            mode='lines', name='До деформації',
+            line=dict(color='#95a5a6', width=1),
+            opacity=0.35, hoverinfo='skip',
         ))
 
-        # 2. Деформовані вузли (Зелені точки) з напруженнями
-        hover_text_def = []
-        for i in range(num_nodes):
-            x, y, z = x_points_modified[i], y_points_modified[i], z_points_modified[i]
-            if stresses and i < len(stresses):
-                s = stresses[i]
-                txt = (f"Вузол {i}<br>"
-                       f"X: {x:.4f}, Y: {y:.4f}, Z: {z:.4f}<br>"
-                       f"Sx: {s[0]:.4f}<br>"
-                       f"Sy: {s[1]:.4f}<br>"
-                       f"Sz: {s[2]:.4f}")
-            else:
-                txt = f"Вузол {i}<br>X: {x:.4f}, Y: {y:.4f}, Z: {z:.4f}"
-            hover_text_def.append(txt)
-
+        # trace 1 — каркас після деформації
         fig.add_trace(go.Scatter3d(
-            x=x_points_modified, y=y_points_modified, z=z_points_modified,
-            mode='markers',
-            name='Деформована форма',
-            marker=dict(size=4, color='green', opacity=0.9),
-            text=hover_text_def,
-            hoverinfo='text'
+            x=lxd, y=lyd, z=lzd,
+            mode='lines', name='Після деформації',
+            line=dict(color='#2ecc71', width=2),
+            hoverinfo='skip',
         ))
 
-        # 3. Лінії для початкової форми (Сині напівпрозорі)
-        lx, ly, lz = self.build_wireframe_coords_optimized(x_points, y_points, z_points, nt_list)
+        # trace 2 — початкові вузли БЕЗ номерів (маленькі, сірі)
         fig.add_trace(go.Scatter3d(
-            x=lx, y=ly, z=lz,
-            mode='lines',
-            name='Сітка (До)',
-            line=dict(color='blue', width=1),
-            opacity=0.2,
-            hoverinfo='skip'
+            x=x0, y=y0, z=z0,
+            mode='markers', name='Початкові вузли',
+            marker=dict(size=3, color='#7f8c8d', opacity=0.5),
+            hoverinfo='skip',
         ))
 
-        # 4. Лінії для деформованої форми (Зелені/Лаймові)
-        lx_mod, ly_mod, lz_mod = self.build_wireframe_coords_optimized(x_points_modified, y_points_modified, z_points_modified, nt_list)
+        # trace 3 — початкові вузли З номерами (приховані за замовч.)
         fig.add_trace(go.Scatter3d(
-            x=lx_mod, y=ly_mod, z=lz_mod,
-            mode='lines',
-            name='Сітка (Після)',
-            line=dict(color='lime', width=3),
-            hoverinfo='skip'
+            x=x0, y=y0, z=z0,
+            mode='markers+text', name='Номери вузлів',
+            marker=dict(size=3, color='#7f8c8d', opacity=0.5),
+            text=[str(i) for i in range(n)],
+            textposition='top center',
+            textfont=dict(size=8, color='#2c3e50'),
+            hoverinfo='skip',
+            visible=True,
         ))
 
-        axis_template = dict(
-            showbackground=False,
-            showgrid=True,   
-            gridcolor='rgba(200, 200, 200, 0.8)',
-            showline=True,  
-            zeroline=True,  
-        )
+        # trace 4 — деформовані вузли з тепловою картою Мізес
+        fig.add_trace(go.Scatter3d(
+            x=xd, y=yd, z=zd,
+            mode='markers', name='Напруження Мізеса',
+            marker=dict(
+                size=6,
+                color=vm,
+                colorscale='Jet',
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text='Напруження<br>Мізеса', font=dict(size=11)),
+                    thickness=16, len=0.6, x=1.01, tickformat='.3f',
+                ),
+                cmin=float(vm.min()), cmax=float(vm.max()),
+            ),
+            text=hover,
+            hovertemplate='%{text}<extra></extra>',
+        ))
 
-        updatemenus = [
-            dict(
-                type="buttons",
-                direction="left",
-                pad={"r": 10, "t": 10},
+        # Кнопка нумерації через Plotly updatemenus
+        fig.update_layout(
+            updatemenus=[dict(
+                type='buttons',
+                direction='left',
+                x=0.0, xanchor='left',
+                y=1.08, yanchor='top',
                 showactive=True,
-                x=0.0,
-                xanchor="left",
-                y=0.9,
-                yanchor="top",
-                buttons=list([
-                    dict(label="Номери вкл", method="restyle", args=[{"mode": "markers+text"}, [0]]),
-                    dict(label="Номери викл", method="restyle", args=[{"mode": "markers"}, [0]]),
-                ]),
-            ),
-        ]
-
-        fig.update_layout(
-            title=f"Деформація (Масштаб: x{scale_factor}, P={P}, E={E}) | Елементів: {len(nt_list)}, Вузлів: {num_nodes}",            updatemenus=updatemenus,
-            scene=dict(
-                xaxis=dict(title='X', **axis_template),
-                yaxis=dict(title='Y', **axis_template),
-                zaxis=dict(title='Z', **axis_template),
-                aspectmode='data', 
-                camera=dict(eye=dict(x=2, y=-2, z=1.7))
-            ),
-            margin=dict(l=0, r=0, b=0, t=40)
+                buttons=[
+                    dict(
+                        label='Номери вузлів: увімк.',
+                        method='update',
+                        args=[{'visible': [True, True, False, True, True]}],
+                    ),
+                    dict(
+                        label='Номери вузлів: вимк.',
+                        method='update',
+                        args=[{'visible': [True, True, True, False, True]}],
+                    ),
+                ],
+                bgcolor='#ecf0f1',
+                bordercolor='#bdc3c7',
+                font=dict(size=11),
+            )]
         )
+
+        title = (
+            f'Деформація паралелепіпеда  |  '
+            f'E = {E}  |  '
+            f'P = {P}  |  '
+            f'масштаб ×{scale_factor}  |  '
+            f'{len(nt_list)} елементів, {n} вузлів'
+        )
+
+        layout = self._base_layout(title)
+        layout['margin'] = dict(l=0, r=90, b=40, t=100)
+        fig.update_layout(**layout)
 
         return fig
 
-    def build_wireframe_coords_optimized(self, nodes_x, nodes_y, nodes_z, nt_list):
-        """Збирає унікальні ребра, щоб не малювати одну лінію двічі"""
-        x_lines, y_lines, z_lines = [], [], []
-        unique_edges = set()
-
-        # Ребра для 20-вузлового елемента (тільки основні контури для швидкості)
-        edge_map = [
-            (0,1), (1,2), (2,3), (3,0), # низ
-            (4,5), (5,6), (6,7), (7,4), # верх
-            (0,4), (1,5), (2,6), (3,7)  # вертикалі
-        ]
-
+    def _wireframe(self, nodes_x, nodes_y, nodes_z, nt_list):
+        xl, yl, zl = [], [], []
+        seen = set()
+        edges = [(0,1),(1,2),(2,3),(3,0),
+                 (4,5),(5,6),(6,7),(7,4),
+                 (0,4),(1,5),(2,6),(3,7)]
         for el in nt_list:
-            for start, end in edge_map:
-                edge = tuple(sorted((el[start], el[end])))
-                if edge not in unique_edges:
-                    unique_edges.add(edge)
-                    
-                    idx1, idx2 = edge
-                    x_lines.extend([nodes_x[idx1], nodes_x[idx2], None])
-                    y_lines.extend([nodes_y[idx1], nodes_y[idx2], None])
-                    z_lines.extend([nodes_z[idx1], nodes_z[idx2], None])
+            for a, b in edges:
+                e = tuple(sorted((el[a], el[b])))
+                if e not in seen:
+                    seen.add(e)
+                    i1, i2 = e
+                    xl += [nodes_x[i1], nodes_x[i2], None]
+                    yl += [nodes_y[i1], nodes_y[i2], None]
+                    zl += [nodes_z[i1], nodes_z[i2], None]
+        return xl, yl, zl
 
-        return x_lines, y_lines, z_lines
+    def _base_layout(self, title):
+        ax = dict(showbackground=False, showgrid=True,
+                  gridcolor='rgba(180,180,180,0.3)', zeroline=True)
+        return dict(
+            title=dict(text=title, x=0.5, font=dict(size=12)),
+            scene=dict(
+                xaxis=dict(title='X', **ax),
+                yaxis=dict(title='Y', **ax),
+                zaxis=dict(title='Z', **ax),
+                aspectmode='data',
+                camera=dict(eye=dict(x=1.8, y=-1.8, z=1.4)),
+            ),
+            legend=dict(
+                x=0.01, y=0.99,
+                bgcolor='rgba(255,255,255,0.85)',
+                bordercolor='rgba(0,0,0,0.15)',
+                borderwidth=1, font=dict(size=11),
+                itemsizing='constant',
+            ),
+            margin=dict(l=0, r=90, b=20, t=60),
+        )

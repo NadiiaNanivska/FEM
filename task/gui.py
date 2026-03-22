@@ -502,16 +502,14 @@ class MyPanel(wx.ScrolledWindow):
         visualizer = MeshVisualizer()
 
         if hasattr(self.results, 'displacements') and self.results.displacements is not None:
-            scale = 1.0
-
             fig = visualizer.plot_deformed_mesh(
                 self.results.AKT,
                 self.results.NT,
                 self.results.displacements,
                 self.results.stresses,
-                scale_factor=scale,
+                scale_factor=1.0,
                 P=self.params.P,
-                E=self.params.E
+                E=self.params.E,
             )
         else:
             fig = visualizer.plot_initial_mesh(self.results.AKT, self.results.NT)
