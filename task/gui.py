@@ -14,6 +14,7 @@ from task.fem_functions.mesh_generator import MeshGenerator
 from task.fem_functions.shape_functions import ShapeFunctionsMath
 from task.windows.mesh_vizualizer import MeshVisualizer
 from task.fem_functions.boundary_condition_manager import BoundaryConditionManager
+from task.windows.depsite_f_viewer import DEPSITEandFViewer
 from task.dto.simulation_results import SimulationResults
 import ctypes
 import threading
@@ -175,9 +176,9 @@ class MyPanel(wx.ScrolledWindow):
 
         label_font = wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
-        self.a_entry = wx.TextCtrl(self, value="4.0")
-        self.b_entry = wx.TextCtrl(self, value="5.0")
-        self.c_entry = wx.TextCtrl(self, value="3.0")
+        self.a_entry = wx.TextCtrl(self, value="2.0")
+        self.b_entry = wx.TextCtrl(self, value="1.0")
+        self.c_entry = wx.TextCtrl(self, value="2.0")
 
         self.n_A = wx.TextCtrl(self, value="2")
         self.n_B = wx.TextCtrl(self, value="1")
@@ -189,7 +190,7 @@ class MyPanel(wx.ScrolledWindow):
 
         self.E_entry = wx.TextCtrl(self, value="1")
         self.nu_entry = wx.TextCtrl(self, value="0.3")
-        self.P_entry = wx.TextCtrl(self, value="5000.0")
+        self.P_entry = wx.TextCtrl(self, value="1.0")
 
         for ctrl in [self.a_entry, self.b_entry, self.c_entry, self.n_A, self.n_B, 
                      self.n_C, self.stick, self.pressure_side, self.E_entry, self.nu_entry, self.P_entry]:
@@ -209,8 +210,9 @@ class MyPanel(wx.ScrolledWindow):
         self.btn_view_mge = wx.Button(self, label="Переглянути MGE")
         self.btn_view_mesh = wx.Button(self, label="Переглянути 3D сітку")
         self.btn_view_results = wx.Button(self, label="Таблиця результатів (Напруження)")
+        self.btn_view_depsite_f = wx.Button(self, label="DEPSITE та Вектор сил F")
 
-        for btn in [self.btn_view_dj, self.btn_view_mge, self.btn_view_mesh, self.btn_view_results]:
+        for btn in [self.btn_view_dj, self.btn_view_mge, self.btn_view_mesh, self.btn_view_results, self.btn_view_depsite_f]:
             btn.SetBackgroundColour(wx.Colour(46, 204, 113))
             btn.SetMinSize((320, 35))
             btn.SetFont(calc_font)
@@ -219,11 +221,13 @@ class MyPanel(wx.ScrolledWindow):
         self.btn_view_mge.Disable()
         self.btn_view_mesh.Disable()
         self.btn_view_results.Disable()
+        self.btn_view_depsite_f.Disable()
 
         self.btn_view_dj.Bind(wx.EVT_BUTTON, self.on_view_dj)
         self.btn_view_mge.Bind(wx.EVT_BUTTON, self.on_view_mge)
         self.btn_view_mesh.Bind(wx.EVT_BUTTON, self.on_view_mesh)
         self.btn_view_results.Bind(wx.EVT_BUTTON, self.on_view_results)
+        self.btn_view_depsite_f.Bind(wx.EVT_BUTTON, self.on_view_depsite_f)
 
         # Ліва колонка - параметри МСЕ
         left_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Параметри МСЕ")
@@ -312,6 +316,7 @@ class MyPanel(wx.ScrolledWindow):
         button_sizer.Add(self.btn_view_dj, 0, wx.ALL | wx.EXPAND, 8)
         button_sizer.Add(self.btn_view_mge, 0, wx.ALL | wx.EXPAND, 8)
         button_sizer.Add(self.btn_view_results, 0, wx.ALL | wx.EXPAND, 8)
+        button_sizer.Add(self.btn_view_depsite_f, 0, wx.ALL | wx.EXPAND, 8)
 
         sizer.Add(button_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
@@ -464,6 +469,7 @@ class MyPanel(wx.ScrolledWindow):
         self.btn_view_mesh.Enable()
         if hasattr(self, 'btn_view_results'):
             self.btn_view_results.Enable()
+            self.btn_view_depsite_f.Enable()
 
         self.Layout()
         wx.MessageBox("Розрахунок успішно завершено!\nСистему рівнянь розв'язано.", "Успіх", wx.OK | wx.ICON_INFORMATION)
@@ -486,6 +492,10 @@ class MyPanel(wx.ScrolledWindow):
 
     def on_view_results(self, event):
         viewer = ResultsTableViewer(self, self.results)
+        viewer.Show()
+
+    def on_view_depsite_f(self, event):
+        viewer = DEPSITEandFViewer(self, self.results)
         viewer.Show()
 
     def on_view_mesh(self, event):
