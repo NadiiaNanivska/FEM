@@ -538,14 +538,13 @@ class MyPanel(wx.ScrolledWindow):
                 dlg.Destroy()
                 return
 
-            comp_key, n_iso, scale = dlg.get_params()
+            comp_key, scale = dlg.get_params()
             dlg.Destroy()
 
             try:
                 html = build_isosurface_figure(
                     self.results,
                     component=comp_key,
-                    n_iso=n_iso,
                     scale_factor=scale,
                 )
             except Exception as e:
