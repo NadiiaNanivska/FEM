@@ -20,6 +20,10 @@ import ctypes
 import threading
 from wx.lib.newevent import NewEvent
 
+from task.windows.stress_isosurface_viewer import (
+    IsoSurfaceDialog, build_isosurface_figure
+)
+
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
@@ -211,8 +215,9 @@ class MyPanel(wx.ScrolledWindow):
         self.btn_view_mesh = wx.Button(self, label="Переглянути 3D сітку")
         self.btn_view_results = wx.Button(self, label="Таблиця результатів (Напруження)")
         self.btn_view_depsite_f = wx.Button(self, label="DEPSITE та Вектор сил F")
+        self.btn_view_iso = wx.Button(self, label="Ізоповерхні напружень")
 
-        for btn in [self.btn_view_dj, self.btn_view_mge, self.btn_view_mesh, self.btn_view_results, self.btn_view_depsite_f]:
+        for btn in [self.btn_view_dj, self.btn_view_mge, self.btn_view_mesh, self.btn_view_results, self.btn_view_depsite_f, self.btn_view_iso]:
             btn.SetBackgroundColour(wx.Colour(46, 204, 113))
             btn.SetMinSize((320, 35))
             btn.SetFont(calc_font)
@@ -222,12 +227,14 @@ class MyPanel(wx.ScrolledWindow):
         self.btn_view_mesh.Disable()
         self.btn_view_results.Disable()
         self.btn_view_depsite_f.Disable()
+        self.btn_view_iso.Disable()
 
         self.btn_view_dj.Bind(wx.EVT_BUTTON, self.on_view_dj)
         self.btn_view_mge.Bind(wx.EVT_BUTTON, self.on_view_mge)
         self.btn_view_mesh.Bind(wx.EVT_BUTTON, self.on_view_mesh)
         self.btn_view_results.Bind(wx.EVT_BUTTON, self.on_view_results)
         self.btn_view_depsite_f.Bind(wx.EVT_BUTTON, self.on_view_depsite_f)
+        self.btn_view_iso.Bind(wx.EVT_BUTTON, self.on_view_iso)
 
         # Ліва колонка - параметри МСЕ
         left_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Параметри МСЕ")
@@ -315,8 +322,9 @@ class MyPanel(wx.ScrolledWindow):
         button_sizer.Add(self.btn_view_mesh, 0, wx.ALL | wx.EXPAND, 8)
         button_sizer.Add(self.btn_view_dj, 0, wx.ALL | wx.EXPAND, 8)
         button_sizer.Add(self.btn_view_mge, 0, wx.ALL | wx.EXPAND, 8)
-        button_sizer.Add(self.btn_view_results, 0, wx.ALL | wx.EXPAND, 8)
         button_sizer.Add(self.btn_view_depsite_f, 0, wx.ALL | wx.EXPAND, 8)
+        button_sizer.Add(self.btn_view_results, 0, wx.ALL | wx.EXPAND, 8)
+        button_sizer.Add(self.btn_view_iso, 0, wx.ALL | wx.EXPAND, 8)
 
         sizer.Add(button_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
@@ -467,6 +475,7 @@ class MyPanel(wx.ScrolledWindow):
 
         self.all_points_button.Enable()
         self.btn_view_mesh.Enable()
+        self.btn_view_iso.Enable()
         if hasattr(self, 'btn_view_results'):
             self.btn_view_results.Enable()
             self.btn_view_depsite_f.Enable()
@@ -517,6 +526,40 @@ class MyPanel(wx.ScrolledWindow):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_file = os.path.join(script_dir, "statics", "result_plot.html")
         fig.write_html(output_file, auto_open=True)
+
+    def on_view_iso(self, event):
+            if self.results.stresses is None:
+                wx.MessageBox("Спочатку виконайте розрахунок.", "Увага",
+                              wx.OK | wx.ICON_WARNING)
+                return
+
+            dlg = IsoSurfaceDialog(self)
+            if dlg.ShowModal() != wx.ID_OK:
+                dlg.Destroy()
+                return
+
+            comp_key, n_iso, scale = dlg.get_params()
+            dlg.Destroy()
+
+            try:
+                html = build_isosurface_figure(
+                    self.results,
+                    component=comp_key,
+                    n_iso=n_iso,
+                    scale_factor=scale,
+                )
+            except Exception as e:
+                wx.MessageBox(f"Помилка побудови ізоповерхонь:\n{e}",
+                              "Помилка", wx.OK | wx.ICON_ERROR)
+                return
+
+            script_dir  = os.path.dirname(os.path.abspath(__file__))
+            output_file = os.path.join(script_dir, "statics", "isosurface.html")
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+
+            import webbrowser
+            webbrowser.open(output_file)
 
 
 class MainFrame(wx.Frame):
