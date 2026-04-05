@@ -525,7 +525,7 @@ class ShapeFunctionsMath:
                 principal.append(eigvals_sorted.tolist())
 
             return principal
-    
+
     def save_dfiabg_to_txt(self, dfiabg_matrix, filename="statics/DFIABG.txt"):
         """
         Зберігає матрицю похідних DFIABG у зручному текстовому форматі.
@@ -584,3 +584,8 @@ class ShapeFunctionsMath:
                 f.write("\n")
                 
         print(f"Матриця DFIXYZ для елемента {element_id} успішно збережена у файл: {filepath}")
+
+def _compute_vm(s):
+    sx, sy, sz, txy, tyz, tzx = s[:,0], s[:,1], s[:,2], s[:,3], s[:,4], s[:,5]
+    return np.sqrt(0.5*((sx-sy)**2 + (sy-sz)**2 + (sz-sx)**2
+                        + 6*(txy**2 + tyz**2 + tzx**2)))

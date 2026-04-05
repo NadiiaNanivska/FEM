@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+from task.fem_functions.shape_functions import _compute_vm
 
 
 class MeshVisualizer:
@@ -46,8 +47,7 @@ class MeshVisualizer:
             txy = s[:, 3]; tyz = s[:, 4]; tzx = s[:, 5]
 
             # Еквівалентне напруження (Von Mises)
-            vm  = np.sqrt(0.5 * ((sx-sy)**2 + (sy-sz)**2 + (sz-sx)**2
-                                 + 6*(txy**2 + tyz**2 + tzx**2)))
+            vm  = _compute_vm(s)
 
             xd = x0 + ux * scale_factor
             yd = y0 + uy * scale_factor

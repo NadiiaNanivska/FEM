@@ -2,7 +2,7 @@ import os
 import numpy as np
 import plotly.graph_objects as go
 import wx
-
+from task.fem_functions.shape_functions import _compute_vm
 
 # Словник доступних компонент
 STRESS_COMPONENTS = {
@@ -17,12 +17,6 @@ STRESS_COMPONENTS = {
     'τYZ':                  'tyz',
     'τZX':                  'tzx',
 }
-
-
-def _compute_vm(s):
-    sx, sy, sz, txy, tyz, tzx = s[:,0], s[:,1], s[:,2], s[:,3], s[:,4], s[:,5]
-    return np.sqrt(0.5*((sx-sy)**2 + (sy-sz)**2 + (sz-sx)**2
-                        + 6*(txy**2 + tyz**2 + tzx**2)))
 
 
 def build_isosurface_figure(results, component='vm',
