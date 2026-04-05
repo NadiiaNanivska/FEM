@@ -17,7 +17,7 @@ class MGEViewer(wx.Frame):
         panel.SetBackgroundColour(wx.Colour(245, 245, 250))
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        # ── Верхня панель ────────────────────────────────────────────────
+        # -- Верхня панель ------------------------------------------------
         top_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         lbl = wx.StaticText(panel, label="Елемент:")
@@ -70,7 +70,7 @@ class MGEViewer(wx.Frame):
 
         vbox.Add(top_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
-        # ── Картки статистики ────────────────────────────────────────────
+        # -- Картки статистики --------------------------------------------
         self.stats_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._stat_panels = {}
         for key, label in [
@@ -96,7 +96,7 @@ class MGEViewer(wx.Frame):
 
         vbox.Add(self.stats_sizer, 0, wx.LEFT | wx.RIGHT, 6)
 
-        # ── Таблиця ──────────────────────────────────────────────────────
+        # -- Таблиця ------------------------------------------------------
         self.grid = wx.grid.Grid(panel)
         self.grid.CreateGrid(60, 60)
         self.grid.EnableEditing(False)
@@ -125,7 +125,7 @@ class MGEViewer(wx.Frame):
         self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_select)
         vbox.Add(self.grid, 1, wx.EXPAND | wx.ALL, 6)
 
-        # ── Рядок статусу ────────────────────────────────────────────────
+        # -- Рядок статусу ------------------------------------------------
         status_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.cell_info = wx.StaticText(panel, label="Клікніть на комірку для деталей")
         self.cell_info.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
@@ -139,7 +139,7 @@ class MGEViewer(wx.Frame):
 
         vbox.Add(status_sizer, 0, wx.EXPAND)
 
-        # ── Легенда ──────────────────────────────────────────────────────
+        # -- Легенда ------------------------------------------------------
         leg_sizer = wx.BoxSizer(wx.HORIZONTAL)
         for color, text in [
             (wx.Colour(180, 210, 255), "Великі позитивні"),
@@ -161,7 +161,7 @@ class MGEViewer(wx.Frame):
         panel.SetSizer(vbox)
         self.update_grid(0)
 
-    # ── Оновлення ────────────────────────────────────────────────────────
+    # -- Оновлення --------------------------------------------------------
     def on_element_change(self, event):
         self.update_grid(self.elem_spin.GetValue())
 
@@ -180,7 +180,7 @@ class MGEViewer(wx.Frame):
         mge = np.array(self.list_of_mge[elem_id])
         self._current_mge = mge
 
-        # ── Статистика ───────────────────────────────────────────────────
+        # -- Статистика ---------------------------------------------------
         diag = np.diag(mge)
         off  = mge - np.diag(diag)
         sym_err = np.linalg.norm(mge - mge.T)
@@ -196,7 +196,7 @@ class MGEViewer(wx.Frame):
             self._stat_panels["sym_err"].SetLabel(f"{sym_err:.3e}")
             self._stat_panels["sym_err"].SetForegroundColour(wx.Colour(180, 80, 0))
 
-        # ── Визначення підматриці ────────────────────────────────────────
+        # -- Визначення підматриці ----------------------------------------
         block = self.block_choice.GetSelection()
         if block == 0:
             sub = mge
@@ -229,7 +229,7 @@ class MGEViewer(wx.Frame):
             self.grid.SetRowLabelValue(i, labels_all[r0 + i])
             self.grid.SetColSize(i, 68)
 
-        # ── Теплова карта ────────────────────────────────────────────────
+        # -- Теплова карта ------------------------------------------------
         abs_max = np.abs(sub).max() or 1.0
 
         self.grid.BeginBatch()
@@ -273,7 +273,7 @@ class MGEViewer(wx.Frame):
 
         self.grid.EndBatch()
 
-    # ── Деталі комірки ───────────────────────────────────────────────────
+    # -- Деталі комірки ---------------------------------------------------
     def _on_cell_select(self, event):
         r, c = event.GetRow(), event.GetCol()
         if self._current_mge is None:
@@ -301,7 +301,7 @@ class MGEViewer(wx.Frame):
         self.cell_info.SetLabel(info)
         event.Skip()
 
-    # ── Перевірка симетрії ───────────────────────────────────────────────
+    # -- Перевірка симетрії -----------------------------------------------
     def _on_check_symmetry(self, event):
         if self._current_mge is None:
             return
@@ -332,7 +332,7 @@ class MGEViewer(wx.Frame):
 
         wx.MessageBox(msg, "Перевірка симетрії MGE", wx.OK | style)
 
-    # ── Копіювати CSV ────────────────────────────────────────────────────
+    # -- Копіювати CSV ----------------------------------------------------
     def _on_copy_csv(self, event):
         if self._current_mge is None:
             return

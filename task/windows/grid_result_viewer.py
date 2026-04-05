@@ -18,7 +18,7 @@ class GridResultsViewer(wx.Frame):
         panel.SetBackgroundColour(wx.Colour(245, 245, 250))
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # ── Верхня панель керування ──────────────────────────────────────
+        # -- Верхня панель керування --------------------------------------
         top_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         lbl_elem = wx.StaticText(panel, label="Елемент:")
@@ -57,7 +57,7 @@ class GridResultsViewer(wx.Frame):
 
         main_sizer.Add(top_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
-        # ── Notebook з вкладками ─────────────────────────────────────────
+        # -- Notebook з вкладками -----------------------------------------
         self.notebook = wx.Notebook(panel)
 
         self.grid_dj = self._create_grid(self.notebook, rows=constants.GAUSS_POINTS_COUNT, cols=9,  is_dj=True)
@@ -72,7 +72,7 @@ class GridResultsViewer(wx.Frame):
 
         main_sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, 5)
 
-        # ── Легенда ──────────────────────────────────────────────────────
+        # -- Легенда ------------------------------------------------------
         legend_sizer = wx.BoxSizer(wx.HORIZONTAL)
         for color, text in [
             (wx.Colour(220, 235, 255), "Позитивне"),
@@ -92,7 +92,7 @@ class GridResultsViewer(wx.Frame):
         panel.SetSizer(main_sizer)
         self.update_grids(0)
 
-    # ── Створення таблиці ────────────────────────────────────────────────
+    # -- Створення таблиці ------------------------------------------------
     def _create_grid(self, parent, rows, cols, is_dj=False):
         grid = wx.grid.Grid(parent)
         grid.CreateGrid(rows, cols)
@@ -122,7 +122,7 @@ class GridResultsViewer(wx.Frame):
 
         return grid
 
-    # ── Оновлення даних ──────────────────────────────────────────────────
+    # -- Оновлення даних --------------------------------------------------
     def on_element_change(self, event):
         self.update_grids(self.elem_spin.GetValue())
 
@@ -195,7 +195,7 @@ class GridResultsViewer(wx.Frame):
         grid.SetCellValue(row, col, display)
         grid.SetCellBackgroundColour(row, col, bg)
 
-    # ── Огляд det(J) по всіх елементах ───────────────────────────────────
+    # -- Огляд det(J) по всіх елементах -----------------------------------
     def _on_show_all_det(self, event):
         dlg = wx.Dialog(self, title="det(J) по всіх елементах", size=(500, 500))
         vbox = wx.BoxSizer(wx.VERTICAL)

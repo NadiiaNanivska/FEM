@@ -84,15 +84,13 @@ class MeshVisualizer:
 
         fig = go.Figure()
 
-        # trace 0 — каркас до деформації
         fig.add_trace(go.Scatter3d(
             x=lx0, y=ly0, z=lz0,
             mode='lines', name='До деформації',
-            line=dict(color='#95a5a6', width=1),
+            line=dict(color='#FF0000', width=2),
             opacity=0.35, hoverinfo='skip',
         ))
 
-        # trace 1 — каркас після деформації
         fig.add_trace(go.Scatter3d(
             x=lxd, y=lyd, z=lzd,
             mode='lines', name='Після деформації',
@@ -100,7 +98,6 @@ class MeshVisualizer:
             hoverinfo='skip',
         ))
 
-        # trace 2 — початкові вузли БЕЗ номерів (маленькі, сірі)
         fig.add_trace(go.Scatter3d(
             x=x0, y=y0, z=z0,
             mode='markers', name='Початкові вузли',

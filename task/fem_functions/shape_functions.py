@@ -493,6 +493,38 @@ class ShapeFunctionsMath:
 
         node_counts[node_counts == 0] = 1
         return (node_stresses / node_counts[:, None]).tolist()
+
+    def calculate_principal_stresses(self, stresses):
+            """
+            Обчислює головні напруження σ₁ ≥ σ₂ ≥ σ₃ для кожного вузла.
+
+            Метод: власні значення симетричного тензора напружень 3×3.
+            Це еквівалентно розв'язку кубічного рівняння (49) з практикуму:
+                σ³ - J₁σ² + J₂σ - J₃ = 0
+            де J₁, J₂, J₃ — інваріанти тензора напружень.
+
+            :param stresses: список [σx, σy, σz, τxy, τyz, τzx] для кожного вузла
+            :return: масив [N × 3] — головні напруження [σ₁, σ₂, σ₃] (спадаючий порядок)
+            """
+            principal = []
+            for s in stresses:
+                sx, sy, sz, txy, tyz, tzx = s
+
+                # Будуємо симетричний тензор напружень 3×3
+                tensor = np.array([
+                    [sx,  txy, tzx],
+                    [txy, sy,  tyz],
+                    [tzx, tyz, sz ],
+                ])
+
+                # Власні значення симетричної матриці
+                eigvals = np.linalg.eigvalsh(tensor)
+
+                # Сортуємо у спадаючому порядку: σ₁ ≥ σ₂ ≥ σ₃
+                eigvals_sorted = np.sort(eigvals)[::-1]
+                principal.append(eigvals_sorted.tolist())
+
+            return principal
     
     def save_dfiabg_to_txt(self, dfiabg_matrix, filename="statics/DFIABG.txt"):
         """

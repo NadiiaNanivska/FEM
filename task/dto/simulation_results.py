@@ -6,18 +6,18 @@ class SimulationResults:
     """
     Датаклас для зберігання всіх результатів МСЕ.
     """
-    DJ: List[Any] = None   # Масиви матриць Якобі
-    DJ_det: List[Any] = None       # Детермінанти
-    DFIXYZ: List[Any] = None      # Реальні похідні функцій форми
-    MGE: List[Any] = None         # Локальні матриці жорсткості елементів
+    DJ: List[Any] = None
+    DJ_det: List[Any] = None
+    DFIXYZ: List[Any] = None
+    MGE: List[Any] = None
 
-    AKT: List[Any] = None         # Глобальні координати вузлів (AKT)
-    NT: List[Any] = None  
-    
-    FE: List[Any] = None          # Локальні вектори сил (FE)  
-    displacements: Any = None     # Глобальний вектор переміщень (U)
-    stresses: List[Any] = None    # Напруження у вузлах
+    AKT: List[Any] = None
+    NT: List[Any] = None
+
+    FE: List[Any] = None
+    displacements: Any = None
+    stresses: List[Any] = None
+    principal_stresses: List[Any] = None
 
     def is_calculated(self) -> bool:
-        """Перевіряє, чи розрахунок вже було виконано."""
-        return self.jacobians is not None
+        return self.DJ is not None
