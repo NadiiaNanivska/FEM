@@ -79,7 +79,6 @@ class MeshVisualizer:
                 f'τYZ = {tyz[i]:.4f}<br>'
                 f'τZX = {tzx[i]:.4f}<br>'
                 f'────────────────<br>'
-                f'<b>Мізес: {vm[i]:.4f}</b>'
             )
 
         fig = go.Figure()
@@ -117,21 +116,12 @@ class MeshVisualizer:
             visible=True,
         ))
 
-        # trace 4 — деформовані вузли з тепловою картою Мізес
+        # trace 4 — деформовані вузли
         fig.add_trace(go.Scatter3d(
             x=xd, y=yd, z=zd,
-            mode='markers', name='Напруження Мізеса',
-            marker=dict(
-                size=6,
-                color=vm,
-                colorscale='Jet',
-                showscale=True,
-                colorbar=dict(
-                    title=dict(text='Напруження<br>Мізеса', font=dict(size=11)),
-                    thickness=16, len=0.6, x=1.01, tickformat='.3f',
-                ),
-                cmin=float(vm.min()), cmax=float(vm.max()),
-            ),
+            mode='markers',
+            marker=dict(size=3, color='#154a23', opacity=0.7),
+            name='Деформовані вузли',
             text=hover,
             hovertemplate='%{text}<extra></extra>',
         ))
