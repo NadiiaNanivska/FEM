@@ -3,22 +3,44 @@ import wx.grid
 import numpy as np
 
 from task import constants
+from task.windows._ui import (
+    header_panel, stat_card, divider,
+    BG_MAIN, CLR_ACCENT, CLR_GREEN, CLR_AMBER, CLR_RED, CLR_LILAC, CLR_TEAL,
+)
 
 
 class GridResultsViewer(wx.Frame):
     def __init__(self, parent, results):
-        super().__init__(parent, title="DJ та DFIXYZ по елементах", size=(1050, 750))
+        nel = len(results.DJ)
+        super().__init__(parent,
+                         title=f"Якобіан DJ та похідні DFIXYZ  |  елементів: {nel}",
+                         size=(1100, 820))
 
         self.all_jacobians = results.DJ
         self.all_det_j     = results.DJ_det
         self.all_dfixyz    = results.DFIXYZ
-        self.max_elements  = len(self.all_jacobians) - 1
+        self.max_elements  = nel - 1
 
         panel = wx.Panel(self)
-        panel.SetBackgroundColour(wx.Colour(245, 245, 250))
+        panel.SetBackgroundColour(BG_MAIN)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # -- Верхня панель керування --------------------------------------
+        # ── Заголовок-банер ───────────────────────────────────────────────
+        hdr = header_panel(
+            panel,
+            title="Якобіан DJ та похідні DFIXYZ",
+            subtitle="Заняття 4 (Практикум) · Формули 27–29, 39–42",
+            dims=[
+                ("DFIABG", "27 × 20 × 3",  CLR_TEAL),
+                ("DJ",     f"{nel} × 27 × 3×3", CLR_ACCENT),
+                ("det(J)", f"{nel} × 27",   CLR_AMBER),
+                ("DFIXYZ", f"{nel} × 27 × 20 × 3", CLR_LILAC),
+            ],
+        )
+        main_sizer.Add(hdr, 0, wx.EXPAND)
+        main_sizer.Add(divider(panel), 0, wx.EXPAND)
+
+        # -- Верхня панель керування ───────────────────────────────────────
         top_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         lbl_elem = wx.StaticText(panel, label="Елемент:")

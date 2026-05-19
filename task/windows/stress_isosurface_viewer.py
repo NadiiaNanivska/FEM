@@ -2,7 +2,7 @@ import os
 import numpy as np
 import plotly.graph_objects as go
 import wx
-from task.fem_functions.shape_functions import _compute_vm
+from task.fem_functions.shape_functions import compute_vm
 
 # Словник доступних компонент
 STRESS_COMPONENTS = {
@@ -45,8 +45,8 @@ def build_isosurface_figure(results, component='vm',
 
     # Вибираємо значення для ізополів
     comp_map = {
-        'vm':  _compute_vm(s),
-        's1':  p[:,0] if p is not None else _compute_vm(s),
+        'vm':  compute_vm(s),
+        's1':  p[:,0] if p is not None else compute_vm(s),
         's2':  p[:,1] if p is not None else s[:,1],
         's3':  p[:,2] if p is not None else s[:,2],
         'sx':  s[:,0], 'sy': s[:,1], 'sz': s[:,2],
@@ -143,6 +143,39 @@ def _wireframe(nodes_x, nodes_y, nodes_z, nt_list):
 
 
 # ── Діалог вибору параметрів ізоліній ────────────────────────────
+class MeshScaleDialog(wx.Dialog):
+    """Діалог вибору масштабу деформації для 3D-сітки."""
+    def __init__(self, parent):
+        super().__init__(parent, title="Параметри відображення сітки", size=(300, 150))
+
+        panel = wx.Panel(self)
+        vbox  = wx.BoxSizer(wx.VERTICAL)
+
+        sc_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sc_lbl = wx.StaticText(panel, label="Масштаб деформації:")
+        sc_sizer.Add(sc_lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self.sc_ctrl = wx.TextCtrl(panel, value="1.0", size=(70, -1))
+        sc_sizer.Add(self.sc_ctrl, 0)
+        vbox.Add(sc_sizer, 0, wx.ALL, 12)
+
+        btn_sizer = wx.StdDialogButtonSizer()
+        ok_btn   = wx.Button(panel, wx.ID_OK, "Побудувати")
+        cncl_btn = wx.Button(panel, wx.ID_CANCEL, "Скасувати")
+        ok_btn.SetDefault()
+        btn_sizer.AddButton(ok_btn)
+        btn_sizer.AddButton(cncl_btn)
+        btn_sizer.Realize()
+        vbox.Add(btn_sizer, 0, wx.ALL | wx.EXPAND, 8)
+
+        panel.SetSizer(vbox)
+
+    def get_scale(self) -> float:
+        try:
+            return float(self.sc_ctrl.GetValue())
+        except ValueError:
+            return 1.0
+
+
 class IsoSurfaceDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title="Параметри візуалізації напружень", size=(340, 260))
@@ -150,7 +183,6 @@ class IsoSurfaceDialog(wx.Dialog):
         panel = wx.Panel(self)
         vbox  = wx.BoxSizer(wx.VERTICAL)
 
-        # Компонента напружень
         comp_lbl = wx.StaticText(panel, label="Компонента напружень:")
         vbox.Add(comp_lbl, 0, wx.ALL, 8)
         self.comp_choice = wx.Choice(panel,
@@ -158,7 +190,6 @@ class IsoSurfaceDialog(wx.Dialog):
         self.comp_choice.SetSelection(0)
         vbox.Add(self.comp_choice, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 8)
 
-        # Масштаб деформації
         sc_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sc_lbl = wx.StaticText(panel, label="Масштаб деформації:")
         sc_sizer.Add(sc_lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
@@ -166,7 +197,6 @@ class IsoSurfaceDialog(wx.Dialog):
         sc_sizer.Add(self.sc_ctrl, 0)
         vbox.Add(sc_sizer, 0, wx.LEFT | wx.RIGHT, 8)
 
-        # Кнопки
         btn_sizer = wx.StdDialogButtonSizer()
         ok_btn  = wx.Button(panel, wx.ID_OK, "Побудувати")
         cncl_btn= wx.Button(panel, wx.ID_CANCEL, "Скасувати")

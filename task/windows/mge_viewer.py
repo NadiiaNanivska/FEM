@@ -2,22 +2,44 @@ import wx
 import wx.grid
 import numpy as np
 
+from task.windows._ui import (
+    header_panel, stat_card, divider,
+    BG_MAIN, CLR_ACCENT, CLR_GREEN, CLR_AMBER, CLR_RED, CLR_LILAC, CLR_TEAL,
+)
+
 
 class MGEViewer(wx.Frame):
     def __init__(self, parent, list_of_mge):
-        super().__init__(parent, title="Локальна Матриця Жорсткості (MGE 60×60)", size=(1100, 800))
+        nel = len(list_of_mge)
+        super().__init__(parent,
+                         title=f"Матриця жорсткості елемента MGE  |  елементів: {nel}",
+                         size=(1150, 860))
 
         self.list_of_mge = list_of_mge
-        self.max_elements = len(list_of_mge) - 1
+        self.max_elements = nel - 1
         self._current_mge = None
         self._show_heatmap = True
         self._show_zeros = True
 
         panel = wx.Panel(self)
-        panel.SetBackgroundColour(wx.Colour(245, 245, 250))
+        panel.SetBackgroundColour(BG_MAIN)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        # -- Верхня панель ------------------------------------------------
+        # ── Заголовок-банер ───────────────────────────────────────────────
+        hdr = header_panel(
+            panel,
+            title="Матриця жорсткості елемента MGE",
+            subtitle="Заняття 6–7 (Практикум) · Формули 15, 38, 43",
+            dims=[
+                ("MGE",  f"{nel} × 60 × 60", CLR_ACCENT),
+                ("блоки A₁₁…A₃₃", "6 × [20 × 20]", CLR_TEAL),
+                ("DOF",  "3 × 20 = 60", CLR_GREEN),
+            ],
+        )
+        vbox.Add(hdr, 0, wx.EXPAND)
+        vbox.Add(divider(panel), 0, wx.EXPAND)
+
+        # -- Верхня панель ─────────────────────────────────────────────────
         top_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         lbl = wx.StaticText(panel, label="Елемент:")

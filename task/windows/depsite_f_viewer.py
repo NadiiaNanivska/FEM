@@ -1,29 +1,48 @@
 import wx
 import wx.grid
+import numpy as np
+
 from task.fem_functions.shape_functions import ShapeFunctionsMath
 from task import constants
 
+from task.windows._ui import (
+    header_panel, divider,
+    BG_MAIN, CLR_ACCENT, CLR_GREEN, CLR_AMBER, CLR_TEAL, CLR_LILAC,
+)
+
 
 class DEPSITEandFViewer(wx.Frame):
-    """
-    Вікно для перегляду матриці DEPSITE (похідні форм-функцій на грані)
-    та глобального вектора сил F з двома вкладками.
-    """
 
     def __init__(self, parent, results):
+        nqp = len(results.AKT) if results.AKT else 0
         super().__init__(
             parent,
-            title="DEPSITE та Вектор сил F",
-            size=(1100, 700)
+            title=f"DEPSITE та Вектор сил F  |  вузлів: {nqp}",
+            size=(1100, 760),
         )
         self.results = results
 
-        # Обчислюємо DEPSITE одразу
+        # Обчислюємо DEPSITE одразу (9 точок Гауса × 8 вузлів × 2 похідні)
         math_engine = ShapeFunctionsMath()
-        self.depsite = math_engine.DEPSITE()  # 9 точок Гауса x 8 вузлів x 2 похідні
+        self.depsite = math_engine.DEPSITE()
 
         panel = wx.Panel(self)
+        panel.SetBackgroundColour(BG_MAIN)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # ── Заголовок-банер ───────────────────────────────────────────────
+        hdr = header_panel(
+            panel,
+            title="DEPSITE та Глобальний вектор сил F",
+            subtitle="Заняття 5, 7 (Практикум) · Формули 33–36, 44–46",
+            dims=[
+                ("DEPSITE", "9 × 8 × 2",        CLR_TEAL),
+                ("FE",      f"{len(results.FE) if results.FE else '?'} × 60", CLR_AMBER),
+                ("F",       f"3·{nqp} = {3*nqp}", CLR_ACCENT),
+            ],
+        )
+        main_sizer.Add(hdr, 0, wx.EXPAND)
+        main_sizer.Add(divider(panel), 0, wx.EXPAND)
 
         self.notebook = wx.Notebook(panel)
 
@@ -124,8 +143,6 @@ class DEPSITEandFViewer(wx.Frame):
         num_nodes = len(self.results.AKT)
 
         # Статистика
-        from task.fem_functions.shape_functions import ShapeFunctionsMath
-        import numpy as np
         math_engine = ShapeFunctionsMath()
         F_global = math_engine.F_Create(self.results.FE, num_nodes, self.results.NT)
 
@@ -211,7 +228,6 @@ class DEPSITEandFViewer(wx.Frame):
                     self.grid_f.SetCellBackgroundColour(row_idx, c, wx.WHITE)
                 else:
                     self.grid_f.SetCellValue(row_idx, c, f"{val:.5e}")
-                    # Підсвічуємо ненульові сили жовтим
                     self.grid_f.SetCellBackgroundColour(row_idx, c, wx.Colour(255, 250, 200))
 
         self.grid_f.EndBatch()

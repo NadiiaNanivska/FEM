@@ -2,18 +2,40 @@ import wx
 import wx.grid
 import numpy as np
 
+from task.windows._ui import (
+    header_panel, divider,
+    BG_MAIN, CLR_ACCENT, CLR_GREEN, CLR_AMBER, CLR_LILAC, CLR_TEAL,
+)
+
 
 class ResultsTableViewer(wx.Frame):
     def __init__(self, parent, results):
-        super().__init__(parent, title="Фінальні результати: Переміщення та Напруження", size=(1600, 720))
+        nqp = len(results.AKT)
+        super().__init__(parent,
+                         title=f"Переміщення та Напруження  |  вузлів: {nqp}",
+                         size=(1600, 760))
 
         self.results = results
         self.sort_col = -1
         self.sort_asc = True
 
         panel = wx.Panel(self)
-        panel.SetBackgroundColour(wx.Colour(245, 245, 250))
+        panel.SetBackgroundColour(BG_MAIN)
         vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # ── Заголовок-банер ───────────────────────────────────────────────
+        hdr = header_panel(
+            panel,
+            title="Переміщення та Напруження у вузлах",
+            subtitle="Заняття 11–12 (Практикум) · MG·U = F → σ = D·B·Uᵉ",
+            dims=[
+                ("U",   f"3·{nqp} = {3*nqp}", CLR_ACCENT),
+                ("σ",   f"{nqp} × 6",         CLR_AMBER),
+                ("σ₁₂₃", f"{nqp} × 3",        CLR_LILAC),
+            ],
+        )
+        vbox.Add(hdr, 0, wx.EXPAND)
+        vbox.Add(divider(panel), 0, wx.EXPAND)
 
         self._build_summary_cards(panel, vbox)
 
@@ -85,15 +107,15 @@ class ResultsTableViewer(wx.Frame):
 
         if view == 0:
             cols = 12
-            col_labels = ["X","Y","Z","U (x)","V (y)","W (z)",
+            col_labels = ["X","Y","Z","U (x)","U (y)","U (z)",
                           "σX","σY","σZ","τXY","τYZ","τZX"]
         elif view == 1:
             cols = 9
-            col_labels = ["X","Y","Z","U (x)","V (y)","W (z)",
+            col_labels = ["X","Y","Z","U (x)","U (y)","U (z)",
                           "σ₁","σ₂","σ₃"]
         else:
             cols = 15
-            col_labels = ["X","Y","Z","U (x)","V (y)","W (z)",
+            col_labels = ["X","Y","Z","U (x)","U (y)","U (z)",
                           "σX","σY","σZ","τXY","τYZ","τZX",
                           "σ₁","σ₂","σ₃"]
 
